@@ -226,25 +226,40 @@ def main():
     DISCARDED_REPORTS_WRITER = csv.DictWriter(discarded_reports_file, delimiter="\t", fieldnames=fieldnames)
     DISCARDED_REPORTS_WRITER.writeheader()
 
-    # merge repeats within data sources before merging between data sources
-    source_dict, columns, variants = preprocessing()
+    # # merge repeats within data sources before merging between data sources
+    #source_dict, columns, variants = preprocessing()
 
-    # merges repeats from different data sources, adds necessary columns and data
-    print "\n------------merging different datasets------------------------------"
-    for source_name, file in source_dict.iteritems():
-        (columns, variants) = add_new_source(columns, variants, source_name,
-                                             file, FIELD_DICT[source_name])
+    # # merges repeats from different data sources, adds necessary columns and data
+    # print "\n------------merging different datasets------------------------------"
+    # for source_name, file in source_dict.iteritems():
+    #     (columns, variants) = add_new_source(columns, variants, source_name,
+    #                                          file, FIELD_DICT[source_name])
 
-    # standardizes genomic coordinates for variants
-    print "\n------------standardizing genomic coordinates-------------"
-    variants = variant_standardize(columns, variants=variants)
+    # # standardizes genomic coordinates for variants
+    # print "\n------------standardizing genomic coordinates-------------"
+    # variants = variant_standardize(columns, variants=variants)
 
+    with open('/files/data/standardized_variants.pickle', 'rb') as f:
+        #pickle.dump(variants, f)
+        variants = pickle.load(f)
+
+    print(len(variants))
+    variants = { k : variants[k] for k in variants.keys()[0:] }    
+    print(len(variants))
+    
     # compare dna sequence results of variants and merge if equivalent
     print "------------dna sequence comparison merge-------------------------------"
-    variants = string_comparison_merge(variants)
 
+    #variants = string_comparison_merge_separated(variants)
+    #variants = find_equivalent_variant(variants)
+    variants = find_equivalent_variant_interval_tree(variants)
+    with open('/files/data/variant_merging_experiment_output/interval_tree_all', 'w') as f:
+        for l in variants:
+            #f.write(str(k) + ' ' + str(v) + '\n')
+            f.write(str(l) + '\n')
+            
     # write final output to file
-    write_new_tsv(ARGS.output + "merged.tsv", columns, variants)
+    write_new_tsv(ARGS.output + "merged_test_baseline_separated_genes.tsv", columns, variants)
 
     # copy enigma file to artifacts directory along with other ready files
     copy(ARGS.input + ENIGMA_FILE, ARGS.output)
@@ -257,7 +272,66 @@ def main():
     print "final number of variants: %d" % len(variants)
     print "Done"
 
+import intervaltree
+def find_equivalent_variant_interval_tree(variants):
+    genome_coors = variants.keys()
+    uniq_variants = {}
+    logging.info("Running find_equivalent_variants.")
+        
+    # for every variant calculate interval and put it into tree.
+    intervals = []
+    delta = 50
+    for k, var in variants.items():
+        p = int(var[COLUMN_VCF_POS])
+        intervals.append(intervaltree.Interval(p-delta, p+delta, data=k))
+            
+    interval_tree = intervaltree.IntervalTree(intervals)
+            
+    # for every variant calculate intersecting variants. test intersecting variants
+            
+    for i, v in enumerate(genome_coors):
+        variant_exist = False
+            
+        p = int(variants[v][COLUMN_VCF_POS])
+            
+        overlaps = interval_tree.search(p-delta, p+delta)
+        #print("-----------------------------")
+        #print(uniq_variants)
+        #print("###################################")
+        overlaps_and_existing = [some_v for (_, _, some_v) in overlaps if some_v in uniq_variants ]
+        #print(overlaps_and_existing)    
+        for existing_v in overlaps_and_existing:
+            if v == existing_v:
+                logging.debug('v == existing_v \n "v: " %s \n "existing_v: " %s', str(v), str(existing_v))
+                continue
+            else:
+                v1 = [variants[v][COLUMN_VCF_CHR], variants[v][COLUMN_VCF_POS], variants[v][COLUMN_VCF_REF], variants[v][COLUMN_VCF_ALT]]
+                v2 = [variants[existing_v][COLUMN_VCF_CHR], variants[existing_v][COLUMN_VCF_POS], variants[existing_v][COLUMN_VCF_REF], variants[existing_v][COLUMN_VCF_ALT]]
+                if variant_equal(v1, v2):
+                    logging.info("Equal variants: \n %s \n %s", str(v1), str(v2))
+                    variant_exist = True
+                    uniq_variants[existing_v].add(v)
+        if not variant_exist:
+            uniq_variants[v] = set([v])
+                            
+    equivalent_variants = []
+    for value in uniq_variants.values():
+        if len(value) > 1:
+            equivalent_variants.append(value)
+    print equivalent_variants
+    return equivalent_variants
+                                                                                                                                                                                                                                                                                                                
+def string_comparison_merge_separated(variants):
+    chromosomes = ['chr13', 'chr17']
 
+    variants_ret = {}
+    for c in chromosomes:
+        variants_parts = { k : variants[k] for k in variants.keys() if k.startswith(c) }
+        variants_parts_merged = find_equivalent_variant(variants_parts)
+        variants_ret.update(variants_parts_merged)
+        
+    return variants_ret
+    
 def variant_standardize(columns, variants="pickle"):
     """standardize variants such
     1. "-" in ref or alt is removed, and a leading base is added, e.g. ->T is changed to N > NT
@@ -492,7 +566,7 @@ def variant_is_false(ref, alt):
 def string_comparison_merge(variants):
     # makes sure the input genomic coordinate strings are unique (no dupes)
     assert (len(variants.keys()) == len(set(variants.keys())))
-
+    
     # optimization for comparison -- saves previously identified equivalent genomic strings in a file for faster reference
     if ARGS.de_novo:
         logging.info('Calculating all equivalent variants without pickle dump.')

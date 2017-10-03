@@ -52,5 +52,7 @@ COPY run_luigi.sh .
 
 ENV LUIGI_CONFIG_PATH="/opt/luigi_pipeline_credentials.cfg"
 
+RUN pip install intervaltree hypothesis pytest
+
 CMD ["/opt/run_luigi.sh"]
 
