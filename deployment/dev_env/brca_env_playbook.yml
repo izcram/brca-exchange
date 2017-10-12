@@ -1,0 +1,88 @@
+- hosts: all
+  become: yes
+  gather_facts: no
+
+  tasks:
+  - name: required packages
+    apt:
+      name: "{{item}}"
+      update_cache: yes
+    with_items:
+      - apache2
+      - git
+      - pkg-config
+      - python-pip
+      - python-dev
+      - wget
+      - postgresql
+      - postgresql-contrib
+      - libapache2-mod-wsgi
+      - libpq-dev
+      - libffi-dev
+      - libxml2-dev
+      - libxmlsec1-dev
+
+
+  # TODO: relative path
+  - copy:
+      src: /Users/marc/git/brca-exchange/website/requirements.txt
+      dest: /tmp
+
+  - name: latest setuptools
+    pip:
+      name: setuptools
+      state: latest
+
+  - name: install python packages
+    pip: requirements=/tmp/requirements.txt
+
+  # TODO: this should be in requirements!
+  - pip:
+      name: ga4gh
+      version: 0.3.3
+
+  - pip:
+      name: virtualenv
+
+  - user:
+      name: brca
+      groups: sudo
+      shell: /bin/bash
+
+  - file:
+      path: /etc/sudoers
+      state: present
+      line: brca ALL=(ALL) NOPASSWD: ALL
+
+  # TODO: put path into some variable
+  - authorized_key:
+      user: brca
+      key: "{{ lookup('file', '/Users/marc/.ssh/id_rsa.pub') }}"
+
+  - postgresql_user:
+      name: postgres
+      password: postgres
+    become: true
+    become_user: postgres
+
+  # issues with the dot, hence not going via postgresql_db
+  - shell: 'createdb storage.pg'
+    become: true
+    become_user: postgres
+
+  - git:
+      repo: 'https://github.com/BRCAChallenge/brca-exchange'
+      dest: /home/brca/brca-exchange
+    become: true
+    become_user: brca
+
+  - shell: 'python /home/brca/brca-exchange/website/django/manage.py migrate'
+    become: true
+    become_user: brca
+
+  - shell: '/home/brca/brca-exchange/deployment/deploy-beta'
+    become: true
+    become_user: brca
+
+
+# setup Virtual hosts

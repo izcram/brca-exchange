@@ -1,0 +1,26 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu/trusty64"
+
+  config.vm.hostname = "brcabox"
+
+  # box can be reach on localhost under this ip address, so ssh can be used on the standard port
+  config.vm.network "private_network", ip: "192.168.42.42"
+
+  config.vm.provision "ansible" do |ansible|
+    ansible.playbook = "brca_env_playbook.yml"
+    ansible.sudo = true
+  end
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.gui = false
+    vb.customize ['modifyvm', :id, '--memory', '4000']
+    vb.customize ["modifyvm", :id, "--cpus", "1"]
+    vb.customize ["modifyvm", :id, "--nictype1", "virtio"]
+  end
+
+  config.vm.network :forwarded_port, guest: 8000, host: 8000, auto_correct: true
+  config.vm.network :forwarded_port, guest: 80, host: 8080, auto_correct: true
+end
