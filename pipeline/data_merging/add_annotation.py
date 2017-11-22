@@ -98,18 +98,20 @@ def addVepResults(row, vepTranscriptConsequenceFields):
         req_url = server+ext+hgvs
         jsonOutput = _make_request(req_url)
 
-        assert(len(jsonOutput) == 1)
-        assert(jsonOutput[0].has_key("transcript_consequences"))
         correctEntry = None
-        logging.info("Completed request and passed assertions.")
-        for entryThisGene in jsonOutput[0]["transcript_consequences"]:
-            if entryThisGene.has_key("transcript_id"):
-                if re.search(BRCA1_CANONICAL, entryThisGene["transcript_id"]):
-                    correctEntry = entryThisGene
-                elif re.search(BRCA2_CANONICAL,
-                               entryThisGene["transcript_id"]):
-                    correctEntry = entryThisGene
+
+        if len(jsonOutput) == 1 and jsonOutput[0].has_key("transcript_consequences"):
+            logging.info("Completed request and passed assertions.")
+            for entryThisGene in jsonOutput[0]["transcript_consequences"]:
+                if entryThisGene.has_key("transcript_id"):
+                    if re.search(BRCA1_CANONICAL, entryThisGene["transcript_id"]):
+                        correctEntry = entryThisGene
+                    elif re.search(BRCA2_CANONICAL,
+                                   entryThisGene["transcript_id"]):
+                        correctEntry = entryThisGene
+
         logging.info("Correct Entry: %s", correctEntry)
+
         if correctEntry is not None:
             for label, field in vepTranscriptConsequenceFields.iteritems():
                 if correctEntry.has_key(field):
