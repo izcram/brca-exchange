@@ -12,13 +12,12 @@ from mock import patch
 
 from common import seq_utils
 from common.config import load_config, extract_gene_regions_dict
+from common.variant_utils import VCFVariant
 from .utilities import round_sigfigs
 from .variant_equivalence import variant_equal, find_equivalent_variant, find_equivalent_variants_whole_seq
 from .variant_merging import normalize_values, add_variant_to_dict, \
     COLUMN_SOURCE, append_exac_allele_frequencies, EXAC_SUBPOPULATIONS
 
-
-from .variant_merging_constants import VCFVariant
 
 runtimes = 500000
 settings.register_profile('ci', settings(max_examples=runtimes, deadline=None))
@@ -292,7 +291,7 @@ def test_variant_equal_not_equiv(v1, v2, ref_id):
     v1 = inject_ref(refsequence1, v1)
     v2 = inject_ref(refsequence2, v2)
     assume(v1[2] != v1[3] and v2[2] != v2[3]) # excluding noop variants
-    
+
     eq1 = equiv_set(refsequence1, v1)
     eq2 = equiv_set(refsequence2, v2)
 

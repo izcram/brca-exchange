@@ -18,6 +18,8 @@ import vcf
 
 from data_merging import aggregate_reports
 from common import seq_utils, config
+from common.hgvs_utils import HgvsWrapper
+from common.variant_utils import VCFVariant
 from data_merging import utilities
 from data_merging import variant_equivalence
 from data_merging.variant_merging_constants import *
@@ -118,6 +120,9 @@ def variant_standardize(columns, seq_provider, gene_regions_tree, variants="pick
         fv.close()
     variants_to_remove = list()
     variants_to_add = {}
+
+    hgvs_wrapper = HgvsWrapper.get_instance()
+
     for ev, items in variants.items():
         bx_ids_for_variant = get_bx_ids_for_variant(bx_id_column_indexes, items)
         chr = items[COLUMN_VCF_CHR]
@@ -150,10 +155,16 @@ def variant_standardize(columns, seq_provider, gene_regions_tree, variants="pick
             variants_to_remove = prepare_variant_for_removal_and_log(ev, hgvs, items, bx_ids_for_variant, reason_for_discard, variants_to_remove)
             continue
 
-        items[COLUMN_VCF_POS] = pos
-        items[COLUMN_VCF_REF] = ref
-        items[COLUMN_VCF_ALT] = alt
-        newHgvs = "chr%s:g.%s:%s>%s" % (str(chr), str(pos), ref, str(alt))
+        v_obj = VCFVariant(int(chr), int(pos), ref, alt)
+        hgvs_obj = v_obj.to_hgvs_obj(hgvs_wrapper.contig_maps[HgvsWrapper.GRCh38_Assem])
+        hgvs_obj_norm = hgvs_wrapper.normalizing(hgvs_obj)
+        # TODO: catch None!
+        v_norm = VCFVariant.from_hgvs_obj(hgvs_obj_norm)
+
+        items[COLUMN_VCF_POS] = v_norm.pos
+        items[COLUMN_VCF_REF] = v_norm.ref
+        items[COLUMN_VCF_ALT] = v_norm.alt
+        newHgvs = str(v_norm) #"chr%s:g.%s:%s>%s" % (str(chr), str(pos), ref, str(alt))
 
         if newHgvs != ev:
             logging.debug("Changed genomic coordinate representation, replacing %s with %s", ev, newHgvs)
